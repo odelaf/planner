@@ -64,7 +64,7 @@ def procesar_datos(df):
     
     return df
 
-# Función para crear el Excel en memoria
+# Función mejorada para crear el Excel en memoria con depuración
 def crear_excel_en_memoria(df, fecha_semana):
     output = BytesIO()
     
@@ -75,31 +75,91 @@ def crear_excel_en_memoria(df, fecha_semana):
         # Hoja 2: "gabinete" - Datos filtrados
         gabinete_df = df.copy()
         
-        # Aplicar filtros para gabinete
+        # DEPURACIÓN: Mostrar valores únicos para diagnóstico
+        st.subheader("🔍 Depuración - Valores Únicos")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.write("**Nombre del depósito:**")
+            st.write(gabinete_df['Nombre del depósito'].unique())
+        
+        with col2:
+            st.write("**Priority:**")
+            st.write(gabinete_df['Priority'].unique())
+        
+        with col3:
+            st.write("**Responsable:**")
+            st.write(gabinete_df['Responsable'].unique())
+        
+        # FILTROS MEJORADOS
+        # 1. Filtro de depósitos (case insensitive y contiene)
         depositos_validos = ['Archivo', 'Caducidades', 'Elusiones', 'Medidas', 'Seguimiento Ambiental']
-        gabinete_df = gabinete_df[
-            (gabinete_df['Nombre del depósito'].isin(depositos_validos)) &
-            (gabinete_df['Priority'] != 'Baja') &
-            (gabinete_df['Responsable'].str.contains('Bruno', na=False))
-        ]
+        
+        # Opción A: Filtro exacto (como estaba)
+        filtro_depositos_exacto = gabinete_df['Nombre del depósito'].isin(depositos_validos)
+        
+        # Opción B: Filtro por contiene (por si hay variaciones)
+        filtro_depositos_contiene = gabinete_df['Nombre del depósito'].apply(
+            lambda x: any(deposito in str(x) for deposito in depositos_validos) if pd.notna(x) else False
+        )
+        
+        # Usar el filtro que funcione mejor
+        filtro_depositos = filtro_depositos_exacto | filtro_depositos_contiene
+        
+        # 2. Filtro de priority (excluir 'Baja')
+        filtro_priority = gabinete_df['Priority'] != 'Baja'
+        
+        # 3. Filtro de responsable (case insensitive, contiene 'Bruno')
+        filtro_responsable = gabinete_df['Responsable'].str.contains('Bruno', case=False, na=False)
+        
+        # Aplicar filtros combinados
+        gabinete_filtrado = gabinete_df[filtro_depositos & filtro_priority & filtro_responsable]
+        
+        # Mostrar resultados de cada filtro
+        st.subheader("📊 Resultados de Filtros")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total registros", len(gabinete_df))
+        with col2:
+            st.metric("Filtro depósitos", filtro_depositos.sum())
+        with col3:
+            st.metric("Filtro priority", filtro_priority.sum())
+        with col4:
+            st.metric("Filtro responsable", filtro_responsable.sum())
+        
+        st.metric("✅ Registros después de filtros", len(gabinete_filtrado))
         
         # Si hay datos después del filtro, crear la hoja gabinete
-        if len(gabinete_df) > 0:
+        if len(gabinete_filtrado) > 0:
             gabinete_final = pd.DataFrame({
-                'Semana': [fecha_semana] * len(gabinete_df),
+                'Semana': [fecha_semana] * len(gabinete_filtrado),
                 'Área (DSC/FIS)': 'FIS',
-                'Responsable': gabinete_df['Responsable'].values,
-                'UF/Proyecto': gabinete_df['Nombre de la tarea'].values,
-                'Región': gabinete_df['Región'].values,
-                'Producto': gabinete_df['Etiquetas'].values,
-                'IGA (RCA/Ruido/PPDA/Lumínica/RILes)': gabinete_df['Nombre del depósito'].values
+                'Responsable': gabinete_filtrado['Responsable'].values,
+                'UF/Proyecto': gabinete_filtrado['Nombre de la tarea'].values,
+                'Región': gabinete_filtrado['Región'].values,
+                'Producto': gabinete_filtrado['Etiquetas'].values,
+                'IGA (RCA/Ruido/PPDA/Lumínica/RILes)': gabinete_filtrado['Nombre del depósito'].values
             })
+            
+            # Mostrar preview del gabinete
+            st.subheader("👀 Vista previa - Gabinete Filtrado")
+            st.dataframe(gabinete_final)
+            
         else:
             # Si no hay datos, crear DataFrame vacío con las columnas
             gabinete_final = pd.DataFrame(columns=[
                 'Semana', 'Área (DSC/FIS)', 'Responsable', 'UF/Proyecto', 
                 'Región', 'Producto', 'IGA (RCA/Ruido/PPDA/Lumínica/RILes)'
             ])
+            st.warning("⚠️ No se encontraron registros que cumplan todos los criterios de filtro")
+            
+            # Mostrar posibles problemas
+            st.info("💡 **Posibles causas:**")
+            st.write("- No hay registros con 'Bruno' en Responsable")
+            st.write("- Los depósitos no coinciden exactamente con los valores esperados")
+            st.write("- Todos los registros tienen Priority 'Baja'")
+            st.write("- Valores nulos en las columnas de filtro")
         
         # Guardar hoja gabinete
         gabinete_final.to_excel(writer, sheet_name='gabinete', index=False)
@@ -134,50 +194,16 @@ if uploaded_file is not None:
                 # Procesar datos
                 df_procesado = procesar_datos(df_original)
                 
-                # Crear Excel en memoria
-                excel_output = crear_excel_en_memoria(df_procesado, fecha_semana)
-                
-                # Mostrar estadísticas
-                col1, col2, col3 = st.columns(3)
+                # Mostrar estadísticas iniciales
+                st.subheader("📈 Estadísticas Iniciales")
+                col1, col2 = st.columns(2)
                 with col1:
                     st.metric("Registros Planner", len(df_procesado))
                 with col2:
-                    gabinete_count = len(df_procesado[
-                        (df_procesado['Nombre del depósito'].isin(['Archivo', 'Caducidades', 'Elusiones', 'Medidas', 'Seguimiento Ambiental'])) &
-                        (df_procesado['Priority'] != 'Baja') &
-                        (df_procesado['Responsable'].str.contains('Bruno', na=False))
-                    ])
-                    st.metric("Registros Gabinete", gabinete_count)
-                with col3:
-                    st.metric("Fecha Semana", fecha_semana)
+                    st.metric("Tareas No Completadas", len(df_procesado))
                 
-                # Mostrar vistas previas
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.subheader("Hoja Planner")
-                    st.dataframe(df_procesado.head())
-                
-                with col2:
-                    st.subheader("Hoja Gabinete")
-                    gabinete_filtrado = df_procesado[
-                        (df_procesado['Nombre del depósito'].isin(['Archivo', 'Caducidades', 'Elusiones', 'Medidas', 'Seguimiento Ambiental'])) &
-                        (df_procesado['Priority'] != 'Baja') &
-                        (df_procesado['Responsable'].str.contains('Bruno', na=False))
-                    ]
-                    if len(gabinete_filtrado) > 0:
-                        gabinete_preview = pd.DataFrame({
-                            'Semana': [fecha_semana] * len(gabinete_filtrado.head()),
-                            'Área': 'FIS',
-                            'Responsable': gabinete_filtrado['Responsable'].head(),
-                            'UF/Proyecto': gabinete_filtrado['Nombre de la tarea'].head(),
-                            'Región': gabinete_filtrado['Región'].head(),
-                            'Producto': gabinete_filtrado['Etiquetas'].head(),
-                            'IGA': gabinete_filtrado['Nombre del depósito'].head()
-                        })
-                        st.dataframe(gabinete_preview)
-                    else:
-                        st.info("No hay registros que cumplan los criterios de filtro para Gabinete")
+                # Crear Excel en memoria con depuración
+                excel_output = crear_excel_en_memoria(df_procesado, fecha_semana)
                 
                 # Botón de descarga
                 st.download_button(
@@ -190,22 +216,6 @@ if uploaded_file is not None:
                 
     except Exception as e:
         st.error(f"❌ Error al procesar el archivo: {str(e)}")
-        st.info("💡 Asegúrate de que el archivo tenga la estructura correcta y las columnas esperadas")
+        st.info("💡 Asegúrate de que el archivo tenga la estructura correcta")
 else:
     st.info("👆 Por favor, carga un archivo Excel para comenzar")
-
-# Información adicional
-with st.expander("ℹ️ Información sobre el procesamiento"):
-    st.markdown("""
-    **Procesamiento aplicado:**
-    - Extracción de región desde código R## en el nombre de tarea
-    - Identificación de responsable desde iniciales
-    - Limpieza de patrones en nombres de tareas
-    - Filtrado de tareas no completadas
-    - Limpieza de etiquetas (remoción de 'acto normal', 'acto complejo', 'acto simple')
-    
-    **Filtros para Gabinete:**
-    - Nombre del depósito: Archivo, Caducidades, Elusiones, Medidas, Seguimiento Ambiental
-    - Priority: No 'Baja'
-    - Responsable: Contiene 'Bruno'
-    """)
