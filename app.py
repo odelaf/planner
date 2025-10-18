@@ -189,7 +189,8 @@ if uploaded_file is not None:
                 )
                 
     except Exception as e:
-        st.error(f"❌ Error al procesar el archivo: {e}")
+        st.error(f"❌ Error al procesar el archivo: {str(e)}")
+        st.info("💡 Asegúrate de que el archivo tenga la estructura correcta y las columnas esperadas")
 else:
     st.info("👆 Por favor, carga un archivo Excel para comenzar")
 
