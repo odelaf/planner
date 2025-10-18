@@ -81,39 +81,29 @@ def crear_excel_en_memoria(df, fecha_semana):
         
         with col1:
             st.write("**Nombre del depósito:**")
-            st.write(gabinete_df['Nombre del depósito'].unique())
+            st.write(gabinete_df['Nombre del depósito'].dropna().unique())
         
         with col2:
             st.write("**Priority:**")
-            st.write(gabinete_df['Priority'].unique())
+            st.write(gabinete_df['Priority'].dropna().unique())
         
         with col3:
-            st.write("**Responsable:**")
-            st.write(gabinete_df['Responsable'].unique())
+            st.write("**Asignado a:**")
+            st.write(gabinete_df['Asignado a'].dropna().unique())
         
-        # FILTROS MEJORADOS
-        # 1. Filtro de depósitos (case insensitive y contiene)
+        # FILTROS CORREGIDOS - USANDO "Asignado a" en lugar de "Responsable"
+        # 1. Filtro de depósitos
         depositos_validos = ['Archivo', 'Caducidades', 'Elusiones', 'Medidas', 'Seguimiento Ambiental']
-        
-        # Opción A: Filtro exacto (como estaba)
-        filtro_depositos_exacto = gabinete_df['Nombre del depósito'].isin(depositos_validos)
-        
-        # Opción B: Filtro por contiene (por si hay variaciones)
-        filtro_depositos_contiene = gabinete_df['Nombre del depósito'].apply(
-            lambda x: any(deposito in str(x) for deposito in depositos_validos) if pd.notna(x) else False
-        )
-        
-        # Usar el filtro que funcione mejor
-        filtro_depositos = filtro_depositos_exacto | filtro_depositos_contiene
+        filtro_depositos = gabinete_df['Nombre del depósito'].isin(depositos_validos)
         
         # 2. Filtro de priority (excluir 'Baja')
         filtro_priority = gabinete_df['Priority'] != 'Baja'
         
-        # 3. Filtro de responsable (case insensitive, contiene 'Bruno Raglianti Sepulveda')
-        filtro_responsable = gabinete_df['Responsable'].str.contains('Bruno Raglianti Sepulveda', case=False, na=False)
+        # 3. Filtro CORREGIDO: usar "Asignado a" en lugar de "Responsable"
+        filtro_asignado = gabinete_df['Asignado a'].str.contains('Bruno', case=False, na=False)
         
         # Aplicar filtros combinados
-        gabinete_filtrado = gabinete_df[filtro_depositos & filtro_priority & filtro_responsable]
+        gabinete_filtrado = gabinete_df[filtro_depositos & filtro_priority & filtro_asignado]
         
         # Mostrar resultados de cada filtro
         st.subheader("📊 Resultados de Filtros")
@@ -126,9 +116,20 @@ def crear_excel_en_memoria(df, fecha_semana):
         with col3:
             st.metric("Filtro priority", filtro_priority.sum())
         with col4:
-            st.metric("Filtro responsable", filtro_responsable.sum())
+            st.metric("Filtro asignado a", filtro_asignado.sum())
         
         st.metric("✅ Registros después de filtros", len(gabinete_filtrado))
+        
+        # Mostrar ejemplos de lo que pasa cada filtro
+        with st.expander("🔎 Ver detalles de los filtros"):
+            st.write("**Registros que pasan filtro depósitos:**")
+            st.dataframe(gabinete_df[filtro_depositos][['Nombre del depósito', 'Asignado a', 'Priority']].head())
+            
+            st.write("**Registros que pasan filtro priority:**")
+            st.dataframe(gabinete_df[filtro_priority][['Nombre del depósito', 'Asignado a', 'Priority']].head())
+            
+            st.write("**Registros que pasan filtro 'Asignado a' (Bruno):**")
+            st.dataframe(gabinete_df[filtro_asignado][['Nombre del depósito', 'Asignado a', 'Priority']].head())
         
         # Si hay datos después del filtro, crear la hoja gabinete
         if len(gabinete_filtrado) > 0:
@@ -156,7 +157,7 @@ def crear_excel_en_memoria(df, fecha_semana):
             
             # Mostrar posibles problemas
             st.info("💡 **Posibles causas:**")
-            st.write("- No hay registros con 'Bruno' en Responsable")
+            st.write("- No hay registros con 'Bruno' en 'Asignado a'")
             st.write("- Los depósitos no coinciden exactamente con los valores esperados")
             st.write("- Todos los registros tienen Priority 'Baja'")
             st.write("- Valores nulos en las columnas de filtro")
