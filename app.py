@@ -109,8 +109,8 @@ def crear_excel_en_memoria(df, fecha_semana):
         # 2. Filtro de priority (excluir 'Baja')
         filtro_priority = gabinete_df['Priority'] != 'Baja'
         
-        # 3. Filtro de responsable (case insensitive, contiene 'Bruno')
-        filtro_responsable = gabinete_df['Responsable'].str.contains('Bruno', case=False, na=False)
+        # 3. Filtro de responsable (case insensitive, contiene 'Bruno Raglianti Sepulveda')
+        filtro_responsable = gabinete_df['Responsable'].str.contains('Bruno Raglianti Sepulveda', case=False, na=False)
         
         # Aplicar filtros combinados
         gabinete_filtrado = gabinete_df[filtro_depositos & filtro_priority & filtro_responsable]
